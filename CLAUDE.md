@@ -14,6 +14,12 @@ npm run build    # Production build
 npm run lint     # Run ESLint
 ```
 
+## Coding Standards
+
+Before generating any code, always refer to the relevant documentation in the `/docs` directory. These files define the standards and conventions that must be followed throughout the project.
+
+- `/docs/ui.md` — UI component and date formatting standards
+
 ## Architecture
 
 - Uses the Next.js **App Router** (`src/app/`). All routes are directories with `page.tsx` files.

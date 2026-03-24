@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { workouts, workoutExercises, exercises, sets } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, gte, lt } from "drizzle-orm";
 
 export type SetDetail = {
   id: number;
@@ -25,30 +25,22 @@ export type WorkoutWithDetails = {
   exercises: ExerciseDetail[];
 };
 
-export async function getWorkoutsForUser(userId: string): Promise<WorkoutWithDetails[]> {
-  const rows = await db
-    .select({
-      workoutId: workouts.id,
-      workoutName: workouts.name,
-      startedAt: workouts.startedAt,
-      completedAt: workouts.completedAt,
-      createdAt: workouts.createdAt,
-      workoutExerciseId: workoutExercises.id,
-      exerciseOrder: workoutExercises.order,
-      exerciseName: exercises.name,
-      setId: sets.id,
-      setNumber: sets.setNumber,
-      reps: sets.reps,
-      weight: sets.weight,
-    })
-    .from(workouts)
-    .leftJoin(workoutExercises, eq(workoutExercises.workoutId, workouts.id))
-    .leftJoin(exercises, eq(exercises.id, workoutExercises.exerciseId))
-    .leftJoin(sets, eq(sets.workoutExerciseId, workoutExercises.id))
-    .where(eq(workouts.userId, userId))
-    .orderBy(workouts.id, workoutExercises.order, sets.setNumber);
+type WorkoutRow = {
+  workoutId: number;
+  workoutName: string | null;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  createdAt: Date;
+  workoutExerciseId: number | null;
+  exerciseOrder: number | null;
+  exerciseName: string | null;
+  setId: number | null;
+  setNumber: number | null;
+  reps: number | null;
+  weight: string | null;
+};
 
-  // Aggregate flat rows into nested structure
+function aggregateWorkoutRows(rows: WorkoutRow[]): WorkoutWithDetails[] {
   const workoutMap = new Map<number, WorkoutWithDetails>();
 
   for (const row of rows) {
@@ -71,7 +63,7 @@ export async function getWorkoutsForUser(userId: string): Promise<WorkoutWithDet
     if (!exercise) {
       exercise = {
         workoutExerciseId: row.workoutExerciseId,
-        order: row.exerciseOrder,
+        order: row.exerciseOrder!,
         exerciseName: row.exerciseName,
         sets: [],
       };
@@ -81,7 +73,7 @@ export async function getWorkoutsForUser(userId: string): Promise<WorkoutWithDet
     if (row.setId != null) {
       exercise.sets.push({
         id: row.setId,
-        setNumber: row.setNumber,
+        setNumber: row.setNumber!,
         reps: row.reps,
         weight: row.weight,
       });
@@ -89,4 +81,44 @@ export async function getWorkoutsForUser(userId: string): Promise<WorkoutWithDet
   }
 
   return Array.from(workoutMap.values());
+}
+
+export async function getWorkoutsForUserByDate(
+  userId: string,
+  date: Date
+): Promise<WorkoutWithDetails[]> {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+
+  const rows = await db
+    .select({
+      workoutId: workouts.id,
+      workoutName: workouts.name,
+      startedAt: workouts.startedAt,
+      completedAt: workouts.completedAt,
+      createdAt: workouts.createdAt,
+      workoutExerciseId: workoutExercises.id,
+      exerciseOrder: workoutExercises.order,
+      exerciseName: exercises.name,
+      setId: sets.id,
+      setNumber: sets.setNumber,
+      reps: sets.reps,
+      weight: sets.weight,
+    })
+    .from(workouts)
+    .leftJoin(workoutExercises, eq(workoutExercises.workoutId, workouts.id))
+    .leftJoin(exercises, eq(exercises.id, workoutExercises.exerciseId))
+    .leftJoin(sets, eq(sets.workoutExerciseId, workoutExercises.id))
+    .where(
+      and(
+        eq(workouts.userId, userId),
+        gte(workouts.createdAt, start),
+        lt(workouts.createdAt, end)
+      )
+    )
+    .orderBy(workouts.id, workoutExercises.order, sets.setNumber);
+
+  return aggregateWorkoutRows(rows);
 }

@@ -19,6 +19,7 @@ npm run lint     # Run ESLint
 Before generating any code, always refer to the relevant documentation in the `/docs` directory. These files define the standards and conventions that must be followed throughout the project.
 
 - `/docs/ui.md` — UI component and date formatting standards
+- `/docs/data-fetching.md` — Data fetching, database query, and authorization standards
 
 ## Architecture
 
